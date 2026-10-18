@@ -1,7 +1,9 @@
+import 'package:collection/collection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/asset_edit.model.dart' hide AssetEditAction;
 import 'package:immich_mobile/domain/models/stack.model.dart';
+import 'package:immich_mobile/extensions/object_extensions.dart';
 import 'package:immich_mobile/providers/api.provider.dart';
 import 'package:immich_mobile/repositories/api.repository.dart';
 import 'package:immich_mobile/utils/option.dart';
@@ -86,6 +88,13 @@ class AssetApiRepository extends ApiRepository {
     return _api.removeAssetEdits(assetId);
   }
 
+  /// Trims are not part of the sync stream, so they are always read from the server
+  Future<TrimEdit?> getTrim(String assetId) async {
+    final response = await checkNull(_api.getAssetEdits(assetId));
+    final trim = response.edits.firstWhereOrNull((edit) => edit.action == AssetEditAction.trim);
+    return trim == null ? null : TrimParameters.fromJson(trim.parameters)?.let(TrimEdit.new);
+  }
+
   Future<void> update(
     List<String> remoteIds, {
     Option<bool> isFavorite = const .none(),
@@ -125,6 +134,10 @@ extension on AssetEdit {
       ),
       MirrorEdit(:final parameters) => AssetEditActionItemDto(
         action: AssetEditAction.mirror,
+        parameters: parameters.toJson(),
+      ),
+      TrimEdit(:final parameters) => AssetEditActionItemDto(
+        action: AssetEditAction.trim,
         parameters: parameters.toJson(),
       ),
     };

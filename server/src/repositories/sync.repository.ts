@@ -4,6 +4,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import type { SyncAck } from 'src/types.js';
 import { columns } from 'src/database.js';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
+import { AssetEditAction } from 'src/dtos/editing.dto.js';
 import { MemoryType } from 'src/enum.js';
 import { DB } from 'src/schema/index.js';
 
@@ -540,11 +541,15 @@ class AssetEditSync extends BaseSync {
 
   @GenerateSql({ params: [dummyQueryOptions], stream: true })
   getUpserts(options: SyncQueryOptions) {
-    return this.upsertQuery('asset_edit', options)
-      .select([...columns.syncAssetEdit, 'asset_edit.updateId'])
-      .innerJoin('asset', 'asset.id', 'asset_edit.assetId')
-      .where('asset.ownerId', '=', options.userId)
-      .stream();
+    return (
+      this.upsertQuery('asset_edit', options)
+        .select([...columns.syncAssetEdit, 'asset_edit.updateId'])
+        .innerJoin('asset', 'asset.id', 'asset_edit.assetId')
+        .where('asset.ownerId', '=', options.userId)
+        // released mobile apps fail to parse unknown edit actions, so trims are only available from the edits endpoint
+        .where('asset_edit.action', '!=', AssetEditAction.Trim)
+        .stream()
+    );
   }
 }
 

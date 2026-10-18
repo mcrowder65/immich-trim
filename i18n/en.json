@@ -2236,6 +2236,7 @@
   "trigger_asset_uploaded_description": "Triggered when a new asset is uploaded",
   "trigger_person_recognized": "Person Recognized",
   "trigger_person_recognized_description": "Triggered when a person is recognized",
+  "trim": "Trim",
   "troubleshoot": "Troubleshoot",
   "type": "Type",
   "unable_to_change_pin_code": "Unable to change PIN code",

@@ -1379,12 +1379,18 @@ export type RotateParameters = {
 export type MirrorParameters = {
     axis: MirrorAxis;
 };
+export type TrimParameters = {
+    /** End of the trimmed video in milliseconds */
+    endMs: number;
+    /** Start of the trimmed video in milliseconds */
+    startMs: number;
+};
 export type AssetEditActionItemResponseDto = {
     action: AssetEditAction;
     /** Asset edit ID */
     id: string;
-    /** List of edit actions to apply (crop, rotate, or mirror) */
-    parameters: CropParameters | RotateParameters | MirrorParameters;
+    /** List of edit actions to apply (crop, rotate, mirror, or trim) */
+    parameters: CropParameters | RotateParameters | MirrorParameters | TrimParameters;
 };
 export type AssetEditsResponseDto = {
     /** Asset ID these edits belong to */
@@ -1394,11 +1400,11 @@ export type AssetEditsResponseDto = {
 };
 export type AssetEditActionItemDto = {
     action: AssetEditAction;
-    /** List of edit actions to apply (crop, rotate, or mirror) */
-    parameters: CropParameters | RotateParameters | MirrorParameters;
+    /** List of edit actions to apply (crop, rotate, mirror, or trim) */
+    parameters: CropParameters | RotateParameters | MirrorParameters | TrimParameters;
 };
 export type AssetEditsCreateDto = {
-    /** List of edit actions to apply (crop, rotate, or mirror) */
+    /** List of edit actions to apply (crop, rotate, mirror, or trim) */
     edits: AssetEditActionItemDto[];
 };
 export type AssetMetadataResponseDto = {
@@ -8324,7 +8330,8 @@ export enum AssetTypeEnum {
 export enum AssetEditAction {
     Crop = "crop",
     Rotate = "rotate",
-    Mirror = "mirror"
+    Mirror = "mirror",
+    Trim = "trim"
 }
 export enum MirrorAxis {
     Horizontal = "horizontal",

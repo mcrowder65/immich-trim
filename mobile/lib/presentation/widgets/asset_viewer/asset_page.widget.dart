@@ -415,7 +415,10 @@ class _AssetPageState extends ConsumerState<AssetPage> {
       onPageBuild: _onPageBuild,
       enablePanAlways: true,
       child: NativeVideoViewer(
-        key: _NativeVideoViewerKey(asset.heroTag),
+        // a trim replaces the video being played, so start a new player for each edit
+        key: _NativeVideoViewerKey(
+          asset is RemoteAsset && asset.isEdited ? '${asset.heroTag}_edited_${asset.thumbHash}' : asset.heroTag,
+        ),
         asset: asset,
         localFilePath: localFilePath,
         isCurrent: isCurrent,

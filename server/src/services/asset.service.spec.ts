@@ -804,5 +804,88 @@ describe(AssetService.name, () => {
 
       expect(mocks.assetEdit.replaceAll).not.toHaveBeenCalled();
     });
+
+    describe('trim', () => {
+      const video = {
+        type: AssetType.Video,
+        livePhotoVideoId: null,
+        originalPath: '/original/video.mov',
+        originalFileName: 'video.mov',
+        duration: 60_000,
+        exifImageWidth: 1920,
+        exifImageHeight: 1080,
+        orientation: null,
+        projectionType: null,
+      };
+
+      beforeEach(() => {
+        mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set(['asset-1']));
+      });
+
+      it('should save a trim for a video and queue the editor job', async () => {
+        mocks.asset.getForEdit.mockResolvedValue(video);
+        const edits = [{ action: AssetEditAction.Trim, parameters: { startMs: 5000, endMs: 45_000 } }];
+        mocks.assetEdit.replaceAll.mockResolvedValue([{ id: 'edit-1', ...edits[0] }] as any);
+
+        await expect(sut.editAsset(authStub.admin, 'asset-1', { edits })).resolves.toEqual({
+          assetId: 'asset-1',
+          edits: [{ id: 'edit-1', ...edits[0] }],
+        });
+
+        expect(mocks.assetEdit.replaceAll).toHaveBeenCalledWith('asset-1', edits);
+        expect(mocks.job.queue).toHaveBeenCalledWith({
+          name: JobName.AssetEditThumbnailGeneration,
+          data: { id: 'asset-1' },
+        });
+      });
+
+      it('should reject a trim that ends before it starts', async () => {
+        mocks.asset.getForEdit.mockResolvedValue(video);
+
+        await expect(
+          sut.editAsset(authStub.admin, 'asset-1', {
+            edits: [{ action: AssetEditAction.Trim, parameters: { startMs: 10_000, endMs: 5000 } }],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(mocks.assetEdit.replaceAll).not.toHaveBeenCalled();
+      });
+
+      it('should reject a trim past the end of the video', async () => {
+        mocks.asset.getForEdit.mockResolvedValue(video);
+
+        await expect(
+          sut.editAsset(authStub.admin, 'asset-1', {
+            edits: [{ action: AssetEditAction.Trim, parameters: { startMs: 0, endMs: 61_000 } }],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(mocks.assetEdit.replaceAll).not.toHaveBeenCalled();
+      });
+
+      it('should reject image edits on a video', async () => {
+        mocks.asset.getForEdit.mockResolvedValue(video);
+
+        await expect(
+          sut.editAsset(authStub.admin, 'asset-1', {
+            edits: [{ action: AssetEditAction.Rotate, parameters: { angle: 90 } }],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(mocks.assetEdit.replaceAll).not.toHaveBeenCalled();
+      });
+
+      it('should reject a trim on an image', async () => {
+        mocks.asset.getForEdit.mockResolvedValue({ ...video, type: AssetType.Image, originalPath: '/photo.jpg' });
+
+        await expect(
+          sut.editAsset(authStub.admin, 'asset-1', {
+            edits: [{ action: AssetEditAction.Trim, parameters: { startMs: 0, endMs: 1000 } }],
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(mocks.assetEdit.replaceAll).not.toHaveBeenCalled();
+      });
+    });
   });
 });

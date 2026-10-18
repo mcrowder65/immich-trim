@@ -129,8 +129,12 @@ export class StorageCore {
     );
   }
 
-  static getEncodedVideoPath(asset: ThumbnailPathEntity) {
-    return StorageCore.getNestedPath(StorageFolder.EncodedVideo, asset.ownerId, `${asset.id}.mp4`);
+  static getEncodedVideoPath(asset: ThumbnailPathEntity, { isEdited = false }: { isEdited?: boolean } = {}) {
+    return StorageCore.getNestedPath(
+      StorageFolder.EncodedVideo,
+      asset.ownerId,
+      `${asset.id}${isEdited ? '_edited' : ''}.mp4`,
+    );
   }
 
   static getHlsSessionFolder({ ownerId, sessionId }: HlsSessionFolder) {

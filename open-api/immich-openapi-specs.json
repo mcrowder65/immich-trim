@@ -20380,7 +20380,8 @@
         "enum": [
           "crop",
           "rotate",
-          "mirror"
+          "mirror",
+          "trim"
         ],
         "type": "string"
       },
@@ -20399,9 +20400,12 @@
               },
               {
                 "$ref": "#/components/schemas/MirrorParameters"
+              },
+              {
+                "$ref": "#/components/schemas/TrimParameters"
               }
             ],
-            "description": "List of edit actions to apply (crop, rotate, or mirror)"
+            "description": "List of edit actions to apply (crop, rotate, mirror, or trim)"
           }
         },
         "required": [
@@ -20431,9 +20435,12 @@
               },
               {
                 "$ref": "#/components/schemas/MirrorParameters"
+              },
+              {
+                "$ref": "#/components/schemas/TrimParameters"
               }
             ],
-            "description": "List of edit actions to apply (crop, rotate, or mirror)"
+            "description": "List of edit actions to apply (crop, rotate, mirror, or trim)"
           }
         },
         "required": [
@@ -20446,7 +20453,7 @@
       "AssetEditsCreateDto": {
         "properties": {
           "edits": {
-            "description": "List of edit actions to apply (crop, rotate, or mirror)",
+            "description": "List of edit actions to apply (crop, rotate, mirror, or trim)",
             "items": {
               "$ref": "#/components/schemas/AssetEditActionItemDto"
             },
@@ -32588,6 +32595,27 @@
         },
         "required": [
           "count"
+        ],
+        "type": "object"
+      },
+      "TrimParameters": {
+        "properties": {
+          "endMs": {
+            "description": "End of the trimmed video in milliseconds",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "startMs": {
+            "description": "Start of the trimmed video in milliseconds",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "endMs",
+          "startMs"
         ],
         "type": "object"
       },

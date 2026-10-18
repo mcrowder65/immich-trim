@@ -168,6 +168,8 @@ class AssetService {
     await _remoteRepository.deleteAssets(remoteIds);
   }
 
+  Future<TrimEdit?> getTrim(String remoteId) => _apiRepository.getTrim(remoteId);
+
   Future<void> applyEdits(String remoteId, List<AssetEdit> edits) async {
     if (edits.isEmpty) {
       await _apiRepository.removeEdits(remoteId);

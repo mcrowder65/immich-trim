@@ -370,6 +370,7 @@ export class AssetService extends BaseService {
       assetFiles.editedPreviewFile?.path,
       assetFiles.editedThumbnailFile?.path,
       assetFiles.encodedVideoFile?.path,
+      assetFiles.editedEncodedVideoFile?.path,
     ];
 
     if (deleteOnDisk && !asset.isOffline) {
@@ -559,8 +560,18 @@ export class AssetService extends BaseService {
       throw new BadRequestException('Asset not found');
     }
 
+    const edits = dto.edits as AssetEditActionItem[];
+
+    if (asset.type === AssetType.Video) {
+      return this.editVideo(id, asset, edits);
+    }
+
     if (asset.type !== AssetType.Image) {
-      throw new BadRequestException('Only images can be edited');
+      throw new BadRequestException('Only images and videos can be edited');
+    }
+
+    if (edits.some((e) => e.action === AssetEditAction.Trim)) {
+      throw new BadRequestException('Trim is only supported for videos');
     }
 
     if (asset.livePhotoVideoId) {
@@ -586,7 +597,6 @@ export class AssetService extends BaseService {
       throw new BadRequestException('Asset dimensions are not available for editing');
     }
 
-    const edits = dto.edits as AssetEditActionItem[];
     const crop = edits.find((e) => e.action === AssetEditAction.Crop);
     if (crop) {
       if (edits[0].action !== AssetEditAction.Crop) {
@@ -610,6 +620,37 @@ export class AssetService extends BaseService {
     await this.jobRepository.queue({ name: JobName.AssetEditThumbnailGeneration, data: { id } });
 
     // Return the asset and its applied edits
+    return {
+      assetId: id,
+      edits: newEdits,
+    };
+  }
+
+  private async editVideo(
+    id: string,
+    asset: { livePhotoVideoId: string | null; duration: number | null },
+    edits: AssetEditActionItem[],
+  ): Promise<AssetEditsResponseDto> {
+    if (asset.livePhotoVideoId) {
+      throw new BadRequestException('Editing live photos is not supported');
+    }
+
+    if (edits.length !== 1 || edits[0].action !== AssetEditAction.Trim) {
+      throw new BadRequestException('Only trim is supported for videos');
+    }
+
+    const { startMs, endMs } = edits[0].parameters;
+    if (startMs >= endMs) {
+      throw new BadRequestException('Trim start must be before trim end');
+    }
+
+    if (asset.duration && endMs > asset.duration) {
+      throw new BadRequestException('Trim end is past the end of the video');
+    }
+
+    const newEdits = await this.assetEditRepository.replaceAll(id, edits);
+    await this.jobRepository.queue({ name: JobName.AssetEditThumbnailGeneration, data: { id } });
+
     return {
       assetId: id,
       edits: newEdits,

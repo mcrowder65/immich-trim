@@ -52,6 +52,22 @@ describe(SyncRequestType.AssetEditsV1, () => {
     await ctx.assertSyncIsComplete(auth, [SyncRequestType.AssetEditsV1]);
   });
 
+  it('should not sync trim edits', async () => {
+    const { auth, ctx } = await setup();
+    const { asset } = await ctx.newAsset({ ownerId: auth.user.id });
+    const assetEditRepo = ctx.get(AssetEditRepository);
+
+    await assetEditRepo.replaceAll(asset.id, [
+      { action: AssetEditAction.Trim, parameters: { startMs: 0, endMs: 1000 } },
+    ]);
+
+    await ctx.assertSyncIsComplete(auth, [SyncRequestType.AssetEditsV1]);
+    await expect(assetEditRepo.getWithSyncInfo(asset.id)).resolves.toEqual([]);
+    await expect(assetEditRepo.getAll(asset.id)).resolves.toEqual([
+      expect.objectContaining({ action: AssetEditAction.Trim, parameters: { startMs: 0, endMs: 1000 } }),
+    ]);
+  });
+
   it('should detect and sync multiple asset edits for the same asset', async () => {
     const { auth, ctx } = await setup();
     const { asset } = await ctx.newAsset({ ownerId: auth.user.id });

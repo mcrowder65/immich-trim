@@ -1,6 +1,7 @@
-import "package:openapi/api.dart" show CropParameters, MirrorParameters, RotateParameters;
+import "package:openapi/api.dart" show CropParameters, MirrorParameters, RotateParameters, TrimParameters;
 
-enum AssetEditAction { rotate, crop, mirror, other }
+// Persisted by index in the local database, so new actions must be appended
+enum AssetEditAction { rotate, crop, mirror, other, trim }
 
 sealed class AssetEdit {
   const AssetEdit();
@@ -22,4 +23,10 @@ class MirrorEdit extends AssetEdit {
   final MirrorParameters parameters;
 
   const MirrorEdit(this.parameters);
+}
+
+class TrimEdit extends AssetEdit {
+  final TrimParameters parameters;
+
+  const TrimEdit(this.parameters);
 }

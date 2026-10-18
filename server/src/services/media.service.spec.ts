@@ -36,6 +36,25 @@ const fullsizeBuffer = Buffer.from('embedded image data');
 const rawBuffer = Buffer.from('raw image data');
 const extractedBuffer = Buffer.from('embedded image file');
 
+const mockVideo = (mocks: ServiceMocks, asset: ReturnType<AssetFactory['build']>) => {
+  const { videoStream, format } = probeStub.videoStreamH264;
+  mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue({
+    ...getForGenerateThumbnail(asset),
+    videoStream,
+    format,
+  });
+  mocks.assetJob.getForVideoConversion.mockResolvedValue({
+    id: asset.id,
+    ownerId: asset.ownerId,
+    originalPath: asset.originalPath,
+    files: asset.files,
+    videoStream,
+    audioStream: null,
+    format,
+  });
+  mocks.media.generateThumbhash.mockResolvedValue(Buffer.from('a thumbhash', 'utf8'));
+};
+
 describe(MediaService.name, () => {
   let sut: MediaService;
   let mocks: ServiceMocks;
@@ -1367,12 +1386,83 @@ describe(MediaService.name, () => {
       mocks.media.getImageMetadata.mockResolvedValue({ width: 100, height: 100, isTransparent: false });
     });
 
-    it('should skip videos', async () => {
-      const asset = AssetFactory.from({ type: AssetType.Video }).exif().build();
-      mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue(getForGenerateThumbnail(asset));
+    describe('videos', () => {
+      it('should not transcode an unedited video', async () => {
+        const asset = AssetFactory.from({ type: AssetType.Video }).exif().build();
+        mockVideo(mocks, asset);
 
-      await expect(sut.handleAssetEditThumbnailGeneration({ id: asset.id })).resolves.toBe(JobStatus.Success);
-      expect(mocks.media.generateThumbnail).not.toHaveBeenCalled();
+        await expect(sut.handleAssetEditThumbnailGeneration({ id: asset.id })).resolves.toBe(JobStatus.Success);
+        expect(mocks.media.generateThumbnail).not.toHaveBeenCalled();
+        expect(mocks.media.transcode).not.toHaveBeenCalled();
+      });
+
+      it('should transcode the trimmed range and generate edited thumbnails', async () => {
+        const asset = AssetFactory.from({ type: AssetType.Video, originalPath: '/original/video.mov' })
+          .exif()
+          .edit({ action: AssetEditAction.Trim, parameters: { startMs: 5000, endMs: 45_000 } })
+          .build();
+        mockVideo(mocks, asset);
+
+        await expect(sut.handleAssetEditThumbnailGeneration({ id: asset.id })).resolves.toBe(JobStatus.Success);
+
+        const editedVideoPath = expect.stringContaining(`${asset.id}_edited.mp4`);
+        expect(mocks.media.transcode).toHaveBeenCalledWith(
+          '/original/video.mov',
+          editedVideoPath,
+          expect.objectContaining({
+            inputOptions: expect.arrayContaining(['-ss', '5.000']),
+            outputOptions: expect.arrayContaining(['-t', '40.000']),
+          }),
+        );
+        expect(mocks.asset.upsertFile).toHaveBeenCalledWith({
+          assetId: asset.id,
+          type: AssetFileType.EncodedVideo,
+          path: editedVideoPath,
+          isEdited: true,
+        });
+        expect(mocks.media.transcode).toHaveBeenCalledWith(
+          editedVideoPath,
+          expect.stringContaining('_preview_edited'),
+          expect.any(Object),
+        );
+        expect(mocks.asset.upsertFiles).toHaveBeenCalledWith(
+          expect.arrayContaining([
+            expect.objectContaining({ type: AssetFileType.Preview, isEdited: true }),
+            expect.objectContaining({ type: AssetFileType.Thumbnail, isEdited: true }),
+          ]),
+        );
+      });
+
+      it('should delete the trimmed files when the trim is removed', async () => {
+        const asset = AssetFactory.from({ type: AssetType.Video })
+          .exif()
+          .files([
+            { type: AssetFileType.Preview, isEdited: false },
+            { type: AssetFileType.Preview, isEdited: true },
+            { type: AssetFileType.Thumbnail, isEdited: true },
+            { type: AssetFileType.EncodedVideo, isEdited: true },
+          ])
+          .build();
+        mockVideo(mocks, asset);
+        mocks.assetJob.getForGenerateThumbnailJob.mockResolvedValue({
+          ...getForGenerateThumbnail(asset),
+          files: getForGenerateThumbnail(asset).files.filter((file) => file.type !== AssetFileType.EncodedVideo),
+        });
+
+        await expect(sut.handleAssetEditThumbnailGeneration({ id: asset.id })).resolves.toBe(JobStatus.Success);
+
+        expect(mocks.media.transcode).not.toHaveBeenCalled();
+        expect(mocks.asset.deleteFiles).toHaveBeenCalledWith([
+          expect.objectContaining({ type: AssetFileType.EncodedVideo, isEdited: true }),
+        ]);
+        expect(mocks.asset.deleteFiles).toHaveBeenCalledWith(
+          expect.arrayContaining([
+            expect.objectContaining({ type: AssetFileType.Preview, isEdited: true }),
+            expect.objectContaining({ type: AssetFileType.Thumbnail, isEdited: true }),
+          ]),
+        );
+        expect(mocks.asset.update).toHaveBeenCalledWith({ id: asset.id, thumbhash: expect.any(Buffer) });
+      });
     });
 
     it('should upsert 3 edited files for edit jobs', async () => {

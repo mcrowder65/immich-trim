@@ -127,8 +127,10 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
         );
       }
 
-      // Attempt to retrieve LocalAsset, falling back to remote if it cannot be found
-      final localAsset = await _localPlaybackAsset(videoAsset);
+      // Attempt to retrieve LocalAsset, falling back to remote if it cannot be found.
+      // The local file is the untrimmed original, so edited videos always play the server's copy
+      final isEditedVideo = videoAsset is RemoteAsset && videoAsset.isEdited;
+      final localAsset = isEditedVideo ? null : await _localPlaybackAsset(videoAsset);
 
       if (localAsset != null) {
         final file = localAsset.isMotionPhoto
@@ -162,7 +164,9 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
       }
 
       final isOriginalVideo = ref.read(appConfigProvider).viewer.loadOriginalVideo;
-      final String postfixUrl = isOriginalVideo ? 'original' : 'video/playback';
+      final String postfixUrl = isOriginalVideo
+          ? (isEditedVideo ? 'original?edited=true' : 'original')
+          : 'video/playback';
       final String assetId = remoteAsset.livePhotoVideoId ?? remoteAsset.id;
       final String videoUrl = '$serverEndpoint/assets/$assetId/$postfixUrl';
 
