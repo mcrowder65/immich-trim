@@ -78,7 +78,7 @@ class EditAssetAction extends AssetActionBuilder {
     unawaited(ref.read(videoPlayerProvider(asset.id).notifier).pause());
 
     try {
-      final edits = await ref.read(driftProvider).remoteAssetRepository.getAssetEdits(asset.id);
+      final trim = await ref.read(assetServiceProvider).getTrim(asset.id);
       if (!context.mounted) {
         return;
       }
@@ -87,7 +87,7 @@ class EditAssetAction extends AssetActionBuilder {
         context.pushRoute(
           TrimVideoRoute(
             asset: asset,
-            initialTrim: edits.whereType<TrimEdit>().firstOrNull,
+            initialTrim: trim,
             applyEdits: (newEdits) => applyEdits(ref, asset.id, newEdits),
           ),
         ),

@@ -3,7 +3,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import type { Kysely } from 'kysely';
 import { columns } from 'src/database.js';
 import { DummyValue, GenerateSql } from 'src/decorators.js';
-import { AssetEditActionItem, AssetEditActionItemResponseDto } from 'src/dtos/editing.dto.js';
+import { AssetEditAction, AssetEditActionItem, AssetEditActionItemResponseDto } from 'src/dtos/editing.dto.js';
 import { DB } from 'src/schema/index.js';
 
 @Injectable()
@@ -39,11 +39,15 @@ export class AssetEditRepository {
 
   @GenerateSql({ params: [DummyValue.UUID] })
   getWithSyncInfo(assetId: string) {
-    return this.db
-      .selectFrom('asset_edit')
-      .select(columns.syncAssetEdit)
-      .where('assetId', '=', assetId)
-      .orderBy('sequence', 'asc')
-      .execute();
+    return (
+      this.db
+        .selectFrom('asset_edit')
+        .select(columns.syncAssetEdit)
+        .where('assetId', '=', assetId)
+        // released mobile apps fail to parse unknown edit actions, see AssetEditSync
+        .where('action', '!=', AssetEditAction.Trim)
+        .orderBy('sequence', 'asc')
+        .execute()
+    );
   }
 }

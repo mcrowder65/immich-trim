@@ -30,5 +30,6 @@ from
   "asset_edit"
 where
   "assetId" = $1
+  and "action" != $2
 order by
   "sequence" asc

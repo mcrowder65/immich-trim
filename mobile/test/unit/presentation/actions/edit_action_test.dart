@@ -109,14 +109,15 @@ void main() {
       expect(find.byType(ImmichIconButton), findsOneWidget);
     });
 
-    testWidgets('reads only the edits for a video it is about to trim', (tester) async {
+    testWidgets('reads the trim from the server for a video it is about to trim', (tester) async {
       final asset = owned(type: .video);
+      when(() => assetService.getTrim(asset.id)).thenAnswer((_) async => null);
 
       await pumpEditAsset(tester, {asset});
       await tester.tap(find.byType(ImmichIconButton));
       await tester.pump();
 
-      verify(() => context.repository.remoteAsset.repo.getAssetEdits(asset.id)).called(1);
+      verify(() => assetService.getTrim(asset.id)).called(1);
       verifyNever(() => context.repository.remoteAsset.repo.watchExif(asset.id));
     });
 
