@@ -28,6 +28,7 @@ export const getAssetFiles = (files: AssetFile[]) => ({
   editedThumbnailFile: getAssetFile(files, AssetFileType.Thumbnail, { isEdited: true }),
 
   encodedVideoFile: getAssetFile(files, AssetFileType.EncodedVideo, { isEdited: false }),
+  editedEncodedVideoFile: getAssetFile(files, AssetFileType.EncodedVideo, { isEdited: true }),
 });
 
 export const addAssets = async (

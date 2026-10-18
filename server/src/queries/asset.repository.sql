@@ -562,9 +562,9 @@ from
   "asset"
   left join "asset_file" on "asset"."id" = "asset_file"."assetId"
   and "asset_file"."isEdited" = $1
-  and "asset_file"."type" = $2
+  and "asset_file"."type" in ($2, $3)
 where
-  "asset"."id" in ($3)
+  "asset"."id" in ($4)
 
 -- AssetRepository.getForOriginals
 select
@@ -576,9 +576,9 @@ from
   "asset"
   left join "asset_file" on "asset"."id" = "asset_file"."assetId"
   and "asset_file"."isEdited" = $1
-  and "asset_file"."type" = $2
+  and "asset_file"."type" in ($2, $3)
 where
-  "asset"."id" in ($3)
+  "asset"."id" in ($4)
 
 -- AssetRepository.getForThumbnail
 select
@@ -606,7 +606,17 @@ select
       "asset_file"."assetId" = "asset"."id"
       and "asset_file"."type" = 'encoded_video'
       and "asset_file"."isEdited" = false
-  ) as "encodedVideoPath"
+  ) as "encodedVideoPath",
+  (
+    select
+      "asset_file"."path"
+    from
+      "asset_file"
+    where
+      "asset_file"."assetId" = "asset"."id"
+      and "asset_file"."type" = 'encoded_video'
+      and "asset_file"."isEdited" = true
+  ) as "editedVideoPath"
 from
   "asset"
 where
@@ -644,6 +654,7 @@ select
   "asset"."livePhotoVideoId",
   "asset"."originalPath",
   "asset"."originalFileName",
+  "asset"."duration",
   "asset_exif"."exifImageWidth",
   "asset_exif"."exifImageHeight",
   "asset_exif"."orientation",

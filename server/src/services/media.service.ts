@@ -15,7 +15,7 @@ import { ImagePathOptions, StorageCore, ThumbnailPathEntity } from 'src/cores/st
 import { AssetFile } from 'src/database.js';
 import { OnEvent, OnJob } from 'src/decorators.js';
 import { ConfigFFmpegDto, SystemConfig } from 'src/dtos/config.dto.js';
-import { AssetEditAction, CropParameters } from 'src/dtos/editing.dto.js';
+import { AssetEditAction, CropParameters, TrimParameters } from 'src/dtos/editing.dto.js';
 import {
   AssetFileType,
   AssetType,
@@ -161,6 +161,10 @@ export class MediaService extends BaseService {
       return JobStatus.Failed;
     }
 
+    if (asset.type === AssetType.Video) {
+      return this.handleVideoEdit(asset, config);
+    }
+
     const generated = await this.generateEditedThumbnails(asset, config);
     await this.syncFiles(
       asset.files.filter((file) => file.isEdited),
@@ -220,10 +224,12 @@ export class MediaService extends BaseService {
       generated.files.push(...editedGenerated.files);
     }
 
-    await this.syncFiles(asset.files, generated.files);
+    // edited video thumbnails are generated from the trimmed video by the editor job, so keep them
+    const isEditedVideo = asset.type === AssetType.Video && asset.edits.length > 0;
+    await this.syncFiles(isEditedVideo ? asset.files.filter((file) => !file.isEdited) : asset.files, generated.files);
     const thumbhash = editedGenerated?.thumbhash || generated.thumbhash;
 
-    if (!asset.thumbhash || Buffer.compare(asset.thumbhash, thumbhash) !== 0) {
+    if (!isEditedVideo && (!asset.thumbhash || Buffer.compare(asset.thumbhash, thumbhash) !== 0)) {
       await this.assetRepository.update({ id: asset.id, thumbhash });
     }
 
@@ -490,18 +496,22 @@ export class MediaService extends BaseService {
     };
   }
 
-  private async generateVideoThumbnails(asset: ThumbnailAsset, { ffmpeg, image }: SystemConfig) {
+  private async generateVideoThumbnails(
+    asset: ThumbnailAsset,
+    { ffmpeg, image }: SystemConfig,
+    { input = asset.originalPath, isEdited = false }: { input?: string; isEdited?: boolean } = {},
+  ) {
     const previewFile = this.getImageFile(asset, {
       fileType: AssetFileType.Preview,
       format: image.preview.format,
-      isEdited: false,
+      isEdited,
       isProgressive: false,
       isTransparent: false,
     });
     const thumbnailFile = this.getImageFile(asset, {
       fileType: AssetFileType.Thumbnail,
       format: image.thumbnail.format,
-      isEdited: false,
+      isEdited,
       isProgressive: false,
       isTransparent: false,
     });
@@ -517,8 +527,8 @@ export class MediaService extends BaseService {
     const previewOptions = previewConfig.getCommand(TranscodeTarget.Video, videoStream, undefined, format ?? undefined);
     const thumbnailOptions = thumbConfig.getCommand(TranscodeTarget.Video, videoStream, undefined, format ?? undefined);
 
-    await this.mediaRepository.transcode(asset.originalPath, previewFile.path, previewOptions);
-    await this.mediaRepository.transcode(asset.originalPath, thumbnailFile.path, thumbnailOptions);
+    await this.mediaRepository.transcode(input, previewFile.path, previewOptions);
+    await this.mediaRepository.transcode(input, thumbnailFile.path, thumbnailOptions);
 
     const processInvalidImages = process.env.IMMICH_PROCESS_INVALID_IMAGES === 'true';
     const preview = await this.mediaRepository.decodeImage(previewFile.path, {
@@ -820,6 +830,88 @@ export class MediaService extends BaseService {
 
     if (pathsToDelete.length > 0) {
       await this.jobRepository.queue({ name: JobName.FileDelete, data: { files: pathsToDelete } });
+    }
+  }
+
+  private async handleVideoEdit(asset: ThumbnailAsset, config: SystemConfig): Promise<JobStatus> {
+    const video = await this.assetJobRepository.getForVideoConversion(asset.id);
+    if (!video) {
+      this.logger.warn(`Video edit failed for asset ${asset.id}: missing video metadata`);
+      return JobStatus.Failed;
+    }
+
+    const oldEditedFiles = asset.files.filter((file) => file.isEdited);
+    const oldEditedVideo = getAssetFile(video.files, AssetFileType.EncodedVideo, { isEdited: true });
+    const trim = asset.edits.find((edit) => edit.action === AssetEditAction.Trim);
+
+    if (!trim) {
+      await this.syncFiles(oldEditedFiles, []);
+      if (oldEditedVideo) {
+        await this.assetRepository.deleteFiles([oldEditedVideo]);
+        await this.jobRepository.queue({ name: JobName.FileDelete, data: { files: [oldEditedVideo.path] } });
+      }
+
+      const preview = getAssetFile(asset.files, AssetFileType.Preview, { isEdited: false });
+      if (preview) {
+        const { colorspace } = config.image;
+        const processInvalidImages = process.env.IMMICH_PROCESS_INVALID_IMAGES === 'true';
+        const decoded = await this.mediaRepository.decodeImage(preview.path, { colorspace, processInvalidImages });
+        const thumbhash = await this.mediaRepository.generateThumbhash(decoded, { colorspace, processInvalidImages });
+        await this.assetRepository.update({ id: asset.id, thumbhash });
+      }
+
+      return JobStatus.Success;
+    }
+
+    const output = StorageCore.getEncodedVideoPath(asset, { isEdited: true });
+    this.storageCore.ensureFolders(output);
+    await this.transcodeTrimmed(video, output, trim.parameters, config.ffmpeg);
+    await this.assetRepository.upsertFile({
+      assetId: asset.id,
+      type: AssetFileType.EncodedVideo,
+      path: output,
+      isEdited: true,
+    });
+
+    const generated = await this.generateVideoThumbnails(asset, config, { input: output, isEdited: true });
+    await this.syncFiles(oldEditedFiles, generated.files);
+    if (!asset.thumbhash || Buffer.compare(asset.thumbhash, generated.thumbhash) !== 0) {
+      await this.assetRepository.update({ id: asset.id, thumbhash: generated.thumbhash });
+    }
+
+    return JobStatus.Success;
+  }
+
+  private async transcodeTrimmed(
+    video: NonNullable<Awaited<ReturnType<AssetJobRepository['getForVideoConversion']>>>,
+    output: string,
+    { startMs, endMs }: TrimParameters,
+    ffmpeg: ConfigFFmpegDto,
+  ) {
+    // always re-encode so the cut points are frame accurate rather than snapped to keyframes.
+    // the trimmed file replaces the original for downloads and shares, so keep the source resolution
+    const getCommand = (config: ConfigFFmpegDto) => {
+      const command = BaseConfig.create({ ...config, targetResolution: 'original' }, this.videoInterfaces).getCommand(
+        TranscodeTarget.All,
+        video.videoStream,
+        video.audioStream ?? undefined,
+      );
+      command.inputOptions.unshift('-ss', (startMs / 1000).toFixed(3));
+      command.outputOptions.push('-t', ((endMs - startMs) / 1000).toFixed(3));
+      return command;
+    };
+
+    this.logger.log(`Trimming video ${video.id} to ${startMs}ms-${endMs}ms`);
+    try {
+      await this.mediaRepository.transcode(video.originalPath, output, getCommand(ffmpeg));
+    } catch (error: any) {
+      if (ffmpeg.accel === TranscodeHardwareAcceleration.Disabled) {
+        throw error;
+      }
+
+      this.logger.error(`Error trimming video ${video.id}: ${error.message}. Retrying without hardware acceleration`);
+      const fallback = { ...ffmpeg, accel: TranscodeHardwareAcceleration.Disabled };
+      await this.mediaRepository.transcode(video.originalPath, output, getCommand(fallback));
     }
   }
 
