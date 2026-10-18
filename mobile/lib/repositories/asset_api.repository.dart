@@ -127,6 +127,10 @@ extension on AssetEdit {
         action: AssetEditAction.mirror,
         parameters: parameters.toJson(),
       ),
+      TrimEdit(:final parameters) => AssetEditActionItemDto(
+        action: AssetEditAction.trim,
+        parameters: parameters.toJson(),
+      ),
     };
   }
 }

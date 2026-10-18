@@ -98,9 +98,26 @@ void main() {
     });
 
     testWidgets('is hidden for a non-editable asset', (tester) async {
-      await pumpEditAsset(tester, {owned(type: .video)});
+      await pumpEditAsset(tester, {owned(type: .other)});
 
       expect(find.byType(ImmichIconButton), findsNothing);
+    });
+
+    testWidgets('offers to trim a single owned video', (tester) async {
+      await pumpEditAsset(tester, {owned(type: .video)});
+
+      expect(find.byType(ImmichIconButton), findsOneWidget);
+    });
+
+    testWidgets('reads only the edits for a video it is about to trim', (tester) async {
+      final asset = owned(type: .video);
+
+      await pumpEditAsset(tester, {asset});
+      await tester.tap(find.byType(ImmichIconButton));
+      await tester.pump();
+
+      verify(() => context.repository.remoteAsset.repo.getAssetEdits(asset.id)).called(1);
+      verifyNever(() => context.repository.remoteAsset.repo.watchExif(asset.id));
     });
 
     testWidgets('reads the edits and exif for the asset it is about to open', (tester) async {

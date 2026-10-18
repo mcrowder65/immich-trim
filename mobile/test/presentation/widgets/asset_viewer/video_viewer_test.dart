@@ -62,6 +62,18 @@ void main() {
     expect(source?.path, endsWith('/assets/${remote.id}/video/playback'));
   });
 
+  testWidgets('plays the trimmed server copy of an edited video even when the local file exists', (tester) async {
+    final edited = remote.copyWith(isEdited: true);
+    when(() => context.service.asset.service.getAsset(edited)).thenAnswer((_) async => edited);
+    when(() => storage.getFileForAsset(local.id)).thenAnswer((_) async => File('/videos/local-1.mp4'));
+
+    final source = await pumpViewer(tester, edited);
+
+    expect(source?.type, VideoSourceType.network);
+    expect(source?.path, endsWith('/assets/${remote.id}/video/playback'));
+    verifyNever(() => storage.getFileForAsset(local.id));
+  });
+
   testWidgets('gives up when a local only asset has no file', (tester) async {
     when(() => storage.getFileForAsset(local.id)).thenAnswer((_) async => null);
 

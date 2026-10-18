@@ -12,6 +12,7 @@ import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/presentation/actions/action.dart';
 import 'package:immich_mobile/presentation/pages/edit/editor.provider.dart';
 import 'package:immich_mobile/presentation/widgets/images/image_provider.dart';
+import 'package:immich_mobile/providers/asset_viewer/video_player_provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/db.provider.dart';
 import 'package:immich_mobile/providers/server_info.provider.dart';
@@ -47,6 +48,10 @@ class EditAssetAction extends AssetActionBuilder {
       return;
     }
 
+    if (asset.isVideo) {
+      return _trim(context, ref, asset);
+    }
+
     try {
       // TODO(shenlong): Move all EXIF and Apply Edits logic onto the Route
       final repository = ref.read(driftProvider).remoteAssetRepository;
@@ -66,6 +71,29 @@ class EditAssetAction extends AssetActionBuilder {
       );
     } catch (error, stack) {
       handleError(error, stack: stack, description: "Failed to open the editor for the asset");
+    }
+  }
+
+  Future<void> _trim(BuildContext context, WidgetRef ref, RemoteAsset asset) async {
+    unawaited(ref.read(videoPlayerProvider(asset.id).notifier).pause());
+
+    try {
+      final edits = await ref.read(driftProvider).remoteAssetRepository.getAssetEdits(asset.id);
+      if (!context.mounted) {
+        return;
+      }
+
+      unawaited(
+        context.pushRoute(
+          TrimVideoRoute(
+            asset: asset,
+            initialTrim: edits.whereType<TrimEdit>().firstOrNull,
+            applyEdits: (newEdits) => applyEdits(ref, asset.id, newEdits),
+          ),
+        ),
+      );
+    } catch (error, stack) {
+      handleError(error, stack: stack, description: "Failed to open the trim editor for the video");
     }
   }
 }
