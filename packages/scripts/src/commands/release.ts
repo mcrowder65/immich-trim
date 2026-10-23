@@ -48,7 +48,7 @@ export const handleRelease = ({ type }: ReleaseOptions) => {
 
   // package.json
   for (const file of [Files.PackageJson.Root, ...Files.PackageJson.Rest]) {
-    pump(file, /^  "version": ".*"/m, `  "version": "${newVersionRaw}"`);
+    pump(file, /^ {2}"version": ".*"/m, `  "version": "${newVersionRaw}"`);
   }
 
   // machine-learning
@@ -215,6 +215,8 @@ export const getMobileBuild = (version: SemVer) => {
 
 const pump = (path: string, pattern: RegExp, replacement: string) => {
   const file = new TextFile(path);
+  // replacement strings intentionally use $1 backreferences
+  // eslint-disable-next-line unicorn/no-unsafe-string-replacement
   const update = file.read().replace(pattern, replacement);
   file.write(update);
 };

@@ -1,9 +1,11 @@
-FROM node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec
 WORKDIR /usr/src/app
 
-RUN corepack enable
+RUN npm install --global corepack@latest && \
+  corepack enable
 
 COPY package* pnpm* .pnpmfile.cjs ./
+COPY ./patches ./patches/
 COPY ./packages/e2e-auth-server/package.json ./packages/e2e-auth-server/
 
 WORKDIR /usr/src/app/packages/e2e-auth-server
