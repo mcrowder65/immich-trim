@@ -76,7 +76,7 @@ export class GitHubClient {
 
   async getPullRequests(numbers: number[]) {
     const pulls = new Map<number, PullRequest>();
-    const [owner, name] = REPO.split('/');
+    const [owner, name] = REPO.split('/', 2);
 
     for (const batch of this.chunk(numbers, PULL_REQUEST_BATCH)) {
       const fields = batch

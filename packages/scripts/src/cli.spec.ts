@@ -23,7 +23,7 @@ describe('cli', () => {
       [['--type'], '--type requires a value'],
       [['--type', 'invalid'], 'invalid is not an allowed choice'],
       [['--type', 'major'], 'major is invalid'],
-    ])('should not accept %j because %s', (args, _description) => {
+    ])('should not accept %j because %s', (args) => {
       expect(() => run(['release', ...args])).toThrow();
       expect(exitMock).toHaveBeenCalledWith(1);
     });

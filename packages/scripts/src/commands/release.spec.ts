@@ -1,6 +1,7 @@
 import semver from 'semver';
 import { describe, expect, it } from 'vitest';
-import { getMobileBuild, getNewVersion, ReleaseError } from './release';
+import { ReleaseError } from 'src/types.js';
+import { getMobileBuild, getNewVersion } from './release';
 
 const mobileBuild = (version: string) =>
   getMobileBuild(semver.parse(version) as semver.SemVer);

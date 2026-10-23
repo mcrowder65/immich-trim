@@ -63,6 +63,9 @@ packageExtensions:
   '@nestjs/swagger':
     peerDependencies:
       typescript: '*'
+  '@koddsson/eslint-plugin-tscompat':
+    peerDependencies:
+      typescript: '*'
 dedupePeerDependents: false
 preferWorkspacePackages: true
 injectWorkspacePackages: true
