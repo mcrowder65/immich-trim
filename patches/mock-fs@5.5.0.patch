@@ -1,0 +1,15 @@
+diff --git a/lib/readfilecontext.js b/lib/readfilecontext.js
+index 27bcfbf1025dcc322773f7ec54af27fa7c33aeb8..a0156eb6b3ffc8c3f197772b57bae34b7cddbb69 100644
+--- a/lib/readfilecontext.js
++++ b/lib/readfilecontext.js
+@@ -18,7 +18,9 @@ exports.getReadFileContextPrototype = function () {
+     return originalOpen.apply(fsBinding, [_path, _flags, _mode, req]);
+   };
+ 
+-  fs.readFile('/ignored.txt', () => {});
++  // Node 26.8+ skips binding.open for fs.readFile unless a buffer is passed
++  // (nodejs/node#65327, tschaub/mock-fs#447)
++  fs.readFile('/ignored.txt', {buffer: Buffer.alloc(1)}, () => {});
+ 
+   fsBinding.open = originalOpen;
+ 

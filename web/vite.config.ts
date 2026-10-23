@@ -60,6 +60,8 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{js,ts}'],
     globals: true,
     environment: 'happy-dom',
+    // Node 25+ exposes a global localStorage that shadows happy-dom's
+    execArgv: ['--no-experimental-webstorage'],
     setupFiles: ['./src/test-data/setup.ts'],
     sequence: {
       hooks: 'list',
